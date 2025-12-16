@@ -40,3 +40,4 @@
 
 # DS_Store files (macOS specific)
 .DS_Store
+.vscode/
