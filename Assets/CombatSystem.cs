@@ -1,3 +1,21 @@
+/*
+ * ----------------------------------------------------------------------------
+ * 腳本名稱：CombatSystem.cs (掛載於 GameManager)
+ * 專案名稱：畢業專題 - 應用深度學習模型於三元克制戰鬥系統
+ * 作者：張志晨 (B11202076) - 中華大學資工系
+ * 日期：2025/12/16
+ * * 功能描述：
+ * 本專案的核心中控系統，擔任「裁判」角色 (God Object for Logic)。
+ * 1. 戰鬥流程管理：接收雙方攻擊請求，鎖定全場，執行回合制動畫演出。
+ * 2. 判定邏輯：執行剪刀石頭布 (Light > Heavy > Block > Light) 勝負判定。
+ * 3. 數據收集：將每一回合的狀態 (HP, Action, Initiator) 寫入 CSV 檔案。
+ * 4. UI 更新：管理血條顯示與遊戲結束狀態。
+ * * 數據存檔位置：
+ * - Windows: %userprofile%/AppData/LocalLow/DefaultCompany/ProjectName/CombatData.csv
+ * - Mac: ~/Library/Application Support/DefaultCompany/ProjectName/CombatData.csv
+ * ----------------------------------------------------------------------------
+ */
+
 using UnityEngine;
 using UnityEngine.UI;
 using System.Collections;
@@ -5,11 +23,12 @@ using System.IO;
 
 public class CombatSystem : MonoBehaviour
 {
+    // 定義動作列舉
     public enum ActionType { None, LightAttack, HeavyAttack, Block }
 
     [Header("控制器連結")]
     public PlayerController playerCtrl;
-    public EnemyController enemyCtrl; // ★ 新增連結
+    public EnemyController enemyCtrl; 
     public Animator playerAnim;
     public Animator enemyAnim;
     
@@ -21,20 +40,23 @@ public class CombatSystem : MonoBehaviour
     [Header("遊戲數值")]
     public int maxHP = 10;
     
+    // --- 內部狀態 ---
     private int playerHP;
     private int enemyHP;
     private bool isGameOver = false;
     private string dataPath;
-    
-    // 全局戰鬥鎖 (只要有人在攻擊，兩邊都不能動)
-    private bool isCombatActive = false; 
+    private bool isCombatActive = false; // 全局戰鬥鎖
 
     void Start()
     {
-        dataPath = Application.dataPath + "/CombatData.csv";
+        // 使用 PersistentDataPath 確保在 Build 出來的遊戲中也能寫入
+        dataPath = Application.persistentDataPath + "/CombatData.csv";
+        Debug.Log("數據存檔路徑: " + dataPath); // 開發時方便查看
+
+        // 如果檔案不存在，寫入 CSV 標頭
         if (!File.Exists(dataPath))
         {
-            string header = "PlayerHP,EnemyHP,EnemyAction,PlayerAction,Initiator\n"; // 多記一個誰發起的
+            string header = "PlayerHP,EnemyHP,EnemyAction,PlayerAction,Initiator\n";
             File.WriteAllText(dataPath, header);
         }
         ResetGame();
@@ -53,38 +75,43 @@ public class CombatSystem : MonoBehaviour
         UpdateUI();
     }
 
-    // 提供給外部查詢：現在能打嗎？
+    /// <summary>
+    /// 外部查詢：目前是否允許發起攻擊？
+    /// </summary>
     public bool CanAct()
     {
         return !isCombatActive && !isGameOver;
     }
 
-    // ★ 玩家按下攻擊鍵時呼叫
+    /// <summary>
+    /// 玩家發起攻擊時呼叫
+    /// </summary>
     public void OnPlayerRequestAttack(ActionType playerAction)
     {
         if (!CanAct()) return;
         
-        // 敵人隨機回應 (這裡未來會換成神經網路預測！)
+        // 敵人隨機回應 (未來此處可讓 AI 根據數據預測來格擋)
         ActionType enemyReaction = (ActionType)Random.Range(1, 4);
         
         StartCoroutine(ResolveTurn(playerAction, enemyReaction, "Player"));
     }
 
-    // ★ 敵人主動攻擊時呼叫
+    /// <summary>
+    /// 敵人主動攻擊時呼叫
+    /// </summary>
     public void OnEnemyRequestAttack(ActionType enemyAction)
     {
         if (!CanAct()) return;
 
-        // 玩家的回應？
-        // 因為敵人是主動的，玩家可能沒按鍵。
-        // 這裡簡化處理：假設玩家來不及反應 (None)，或者你可以加上一個極短的 QTE 時間讓玩家按
-        // 為了數據收集方便，我們先假設玩家是 None (或是隨機，模擬玩家剛好也在亂按)
+        // 玩家回應設為 None (模擬玩家未反應，或需加入 QTE 機制)
         ActionType playerReaction = ActionType.None; 
 
         StartCoroutine(ResolveTurn(playerReaction, enemyAction, "Enemy"));
     }
 
-    // 統一處理戰鬥回合
+    /// <summary>
+    /// 核心協程：處理戰鬥回合的完整流程
+    /// </summary>
     IEnumerator ResolveTurn(ActionType pAction, ActionType eAction, string initiator)
     {
         isCombatActive = true; // 鎖定全場
@@ -93,21 +120,21 @@ public class CombatSystem : MonoBehaviour
         playerCtrl.SetMovementLock(true);
         enemyCtrl.SetMovementLock(true);
 
-        // 2. 記錄數據
+        // 2. 記錄數據 (Append 到 CSV)
         string logLine = $"{playerHP},{enemyHP},{(int)eAction},{(int)pAction},{initiator}\n";
         File.AppendAllText(dataPath, logLine);
 
-        // 3. 播放動畫 (None 代表發呆或來不及反應)
+        // 3. 播放動畫
         if(pAction != ActionType.None) PlayAnimation(playerAnim, pAction);
         if(eAction != ActionType.None) PlayAnimation(enemyAnim, eAction);
 
-        // 4. 等待接觸
+        // 4. 等待接觸點 (Impact Time)
         yield return new WaitForSeconds(0.4f);
 
         // 5. 判定勝負
         int result = GetResultScore(pAction, eAction);
 
-        // 6. 結算
+        // 6. 結算傷害與特效
         if (result == 1) // 玩家贏
         {
             enemyHP--;
@@ -125,10 +152,10 @@ public class CombatSystem : MonoBehaviour
         UpdateUI();
         CheckGameOver();
 
-        // 7. 後搖
+        // 7. 後搖時間 (Recovery Time)
         yield return new WaitForSeconds(0.6f);
 
-        // 8. 解鎖
+        // 8. 解鎖 (如果遊戲還沒結束)
         if (!isGameOver)
         {
             isCombatActive = false;
@@ -137,20 +164,23 @@ public class CombatSystem : MonoBehaviour
         }
     }
 
-    // 判定邏輯 (增加對 None 的處理)
+    /// <summary>
+    /// 三元克制邏輯：1=PlayerWin, -1=EnemyWin, 0=Draw
+    /// </summary>
     int GetResultScore(ActionType p, ActionType e)
     {
-        // 如果一方沒出招 (None)，另一方只要有攻擊就算贏
-        if (p == ActionType.None && (e == ActionType.LightAttack || e == ActionType.HeavyAttack)) return -1; // 玩家發呆，敵人打 -> 敵人贏
-        if (e == ActionType.None && (p == ActionType.LightAttack || p == ActionType.HeavyAttack)) return 1;  // 敵人發呆，玩家打 -> 玩家贏
+        // 處理一方未出招的情況 (None)
+        if (p == ActionType.None && (e != ActionType.None)) return -1; // 玩家發呆 -> 輸
+        if (e == ActionType.None && (p != ActionType.None)) return 1;  // 敵人發呆 -> 贏
 
         if (p == e) return 0;
+        
+        // 剪刀石頭布邏輯
         if (p == ActionType.LightAttack) return (e == ActionType.HeavyAttack) ? 1 : -1;
         else if (p == ActionType.HeavyAttack) return (e == ActionType.Block) ? 1 : -1;
         else return (e == ActionType.LightAttack) ? 1 : -1; // Block
     }
 
-    // ... (UI 和 PlayAnimation 函式保持不變) ...
     void PlayAnimation(Animator anim, ActionType action)
     {
         if (action == ActionType.LightAttack) anim.SetTrigger("Light");
