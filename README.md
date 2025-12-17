@@ -49,4 +49,4 @@ PlayerHP, EnemyHP, EnemyAction, PlayerAction, Initiator
 9, 10, 1, 3, Player
 ...
 ```
-Action Mapping: 0=None, 1=Light, 2=Heavy, 3=Block
+* **Action Mapping: 0=None, 1=Light, 2=Heavy, 3=Block**
