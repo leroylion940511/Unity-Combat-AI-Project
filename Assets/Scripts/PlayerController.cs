@@ -1,61 +1,72 @@
-/*
- * ----------------------------------------------------------------------------
- * 腳本名稱：PlayerController.cs
- * 專案名稱：畢業專題 - 應用深度學習模型於三元克制戰鬥系統
- * 作者：張志晨 (B11202076) - 中華大學資工系
- * 日期：2025/12/16
- * * 功能描述：
- * 本腳本負責「玩家身體」的所有控制邏輯，包含：
- * 1. 移動控制：處理 WASD 輸入，支援「自由視角移動」與「鎖定視角平移 (Strafing)」兩種模式。
- * 2. 動畫同步：根據移動速度更新 Animator 的 IsWalking 參數。
- * 3. 攻擊請求：偵測 J/K/L 輸入，並向 GameManager 發送攻擊請求，自身不處理傷害判定。
- * 4. 行動鎖定：提供接口讓 CombatSystem 在戰鬥演出時鎖住玩家移動。
- * ----------------------------------------------------------------------------
- */
+// 作者：張志晨 (B11202076)
+// 單位：中華大學資工系
+// 專案：畢業專題 - 應用深度學習模型於三元克制戰鬥系統
+// 日期：2025/12/17
+// 功能：玩家控制器 (移動、動畫同步、攻擊輸入偵測)
 
 using UnityEngine;
 
+/// <summary>
+/// 負責玩家角色的核心控制，包含移動邏輯 (WASD) 與攻擊指令發送 (J/K/L)。
+/// </summary>
 public class PlayerController : MonoBehaviour
 {
     [Header("數值設定")]
-    public float moveSpeed = 4.0f;  // 移動速度
-    public float rotateSpeed = 10f; // 轉身速度
+    /// <summary> 玩家移動速度 </summary>
+    public float moveSpeed = 4.0f;
+    /// <summary> 玩家轉身速度 (自由視角模式用) </summary>
+    public float rotateSpeed = 10f;
 
     [Header("元件連結")]
-    public Animator anim;            // 自身的 Animator
-    public CameraController camCtrl; // 為了知道是否鎖定
-    public Transform mainCameraTrans;// 為了知道鏡頭方向
-    
-    // 連結 GameManager，方便呼叫戰鬥請求
-    public CombatSystem combatSystem; 
+    /// <summary> 自身的 Animator 元件 </summary>
+    public Animator anim;
+    /// <summary> 攝影機控制器 (用於判斷鎖定狀態) </summary>
+    public CameraController camCtrl;
+    /// <summary> 主攝影機 Transform (用於計算相對移動方向) </summary>
+    public Transform mainCameraTrans;
+    /// <summary> 戰鬥系統核心 (用於發送攻擊請求) </summary>
+    public CombatSystem combatSystem;
 
     // --- 內部狀態 ---
-    private bool canMove = true; // 是否允許移動 (由 CombatSystem 控制)
+    /// <summary> 是否允許移動 (由 CombatSystem 控制，例如攻擊硬直時為 false) </summary>
+    private bool canMove = true;
 
     /// <summary>
-    /// 設定是否鎖住移動 (用於攻擊硬直或過場動畫)
+    /// 設定是否鎖住移動 (用於攻擊硬直、QTE 或過場動畫)。
     /// </summary>
+    /// <param name="isLocked">true = 鎖定 (無法移動); false = 解鎖</param>
     public void SetMovementLock(bool isLocked)
     {
         canMove = !isLocked;
-        // 如果被鎖住，強制停止走路動畫，避免滑步
-        if (!canMove) anim.SetBool("IsWalking", false);
+        
+        // 如果被鎖住，強制重置走路動畫參數，避免原地滑步
+        if (!canMove) 
+        {
+            anim.SetBool("IsWalking", false);
+        }
     }
 
     void Update()
     {
-        // 1. 處理攻擊輸入 (即使不能移動，有時候也能預輸入，但這裡先簡單處理)
+        // 1. 處理攻擊輸入 
+        // (即使被鎖定移動，有時仍需允許輸入以進行連段或 QTE，故獨立處理)
         CheckAttackInput();
 
-        // 2. 處理移動
-        if (canMove) HandleMovement();
+        // 2. 處理移動邏輯
+        if (canMove) 
+        {
+            HandleMovement();
+        }
     }
 
+    /// <summary>
+    /// 偵測攻擊按鍵 (J/K/L) 並通知 CombatSystem。
+    /// </summary>
     void CheckAttackInput()
     {
-        // 這裡不需要檢查 combatSystem.CanAct() 了
-        // 因為我們希望在 QTE (CannotAct) 的時候也能輸入
-        // 判斷邏輯交給 CombatSystem 裡面去分流
+        // 註：這裡不檢查 combatSystem.CanAct()，
+        // 因為 QTE 狀態下 (CannotAct) 可能仍需要接收輸入。
+        // 具體的行動判斷交給 CombatSystem 內部邏輯處理。
         
         if (Input.GetKeyDown(KeyCode.J)) 
             combatSystem.OnPlayerInput(CombatSystem.ActionType.LightAttack);
@@ -67,12 +78,15 @@ public class PlayerController : MonoBehaviour
             combatSystem.OnPlayerInput(CombatSystem.ActionType.Block);
     }
 
+    /// <summary>
+    /// 處理角色移動與旋轉 (支援鎖定視角與自由視角)。
+    /// </summary>
     void HandleMovement()
     {
         float h = Input.GetAxis("Horizontal");
         float v = Input.GetAxis("Vertical");
         
-        // 判斷是否有輸入
+        // 判斷是否有輸入 (設定 Deadzone 防止手把漂移)
         bool isMoving = (Mathf.Abs(h) > 0.1f || Mathf.Abs(v) > 0.1f);
         anim.SetBool("IsWalking", isMoving);
 
@@ -82,32 +96,35 @@ public class PlayerController : MonoBehaviour
         if (camCtrl.isLockedOn && camCtrl.lockTarget != null)
         {
             // --- 鎖定模式 (Strafing) ---
-            // 強制面向敵人
+            // 1. 強制面向敵人
             Vector3 lookPos = camCtrl.lockTarget.position;
-            lookPos.y = transform.position.y;
+            lookPos.y = transform.position.y; // 保持水平旋轉
             transform.LookAt(lookPos);
 
-            // 平移移動
+            // 2. 進行平移移動 (相對於角色的前後左右)
             Vector3 moveDir = (transform.forward * v) + (transform.right * h);
             transform.position += moveDir * moveSpeed * Time.deltaTime;
         }
         else
         {
             // --- 自由模式 (Free Roam) ---
-            // 以攝影機為前方的相對移動
+            // 1. 計算相對於攝影機的移動方向
             Vector3 camForward = mainCameraTrans.forward;
             camForward.y = 0; 
             camForward.Normalize();
+            
             Vector3 camRight = mainCameraTrans.right;
             camRight.y = 0;
             camRight.Normalize();
 
             Vector3 moveDir = (camForward * v) + (camRight * h);
 
+            // 2. 轉身並移動
             if (moveDir.magnitude > 0.1f)
             {
                 Quaternion toRotation = Quaternion.LookRotation(moveDir, Vector3.up);
                 transform.rotation = Quaternion.Slerp(transform.rotation, toRotation, rotateSpeed * Time.deltaTime);
+                
                 transform.position += moveDir * moveSpeed * Time.deltaTime;
             }
         }

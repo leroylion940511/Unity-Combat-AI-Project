@@ -1,19 +1,39 @@
-using UnityEngine;
-using UnityEngine.SceneManagement; // ★ 這行一定要加，才能切換場景
+// 作者：張志晨 (B11202076)
+// 單位：中華大學資工系
+// 專案：畢業專題 - 應用深度學習模型於三元克制戰鬥系統
+// 日期：2025/12/17
+// 功能：主選單控制器 (開始遊戲、離開遊戲)
 
+using UnityEngine;
+using UnityEngine.SceneManagement; // ★ 必須引用此命名空間才能進行場景切換
+
+/// <summary>
+/// 管理主選單 (Main Menu) 的按鈕事件。
+/// 需掛載於 Canvas 或空物件上，並將按鈕的 OnClick 事件綁定至此腳本的方法。
+/// </summary>
 public class MainMenu : MonoBehaviour
 {
-    // 按下 "Start Game" 執行這段
+    /// <summary>
+    /// 開始遊戲按鈕的功能。
+    /// 邏輯：讀取 Build Settings 列表中的「下一個」場景。
+    /// </summary>
     public void PlayGame()
     {
-        // 讀取列表中的下一個場景 (通常是索引值 1 的場景)
+        // SceneManager.GetActiveScene().buildIndex 取得當前場景編號 (主選單通常是 0)
+        // LoadScene 載入編號 + 1 的場景 (通常是遊戲關卡，即 1)
+        // ★ 注意：請務必在 File -> Build Settings 中將場景加入列表，否則會報錯。
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
     }
 
-    // 按下 "Quit" 執行這段
+    /// <summary>
+    /// 離開遊戲按鈕的功能。
+    /// </summary>
     public void QuitGame()
     {
-        Debug.Log("遊戲已關閉！"); // 在編輯器裡看不到關閉，所以印個 Log 確認
+        // 顯示 Log 以便在 Unity 編輯器中確認按鈕是否運作
+        Debug.Log("遊戲已關閉 (Quit Game)"); 
+        
+        // 關閉應用程式 (僅在打包後的 .exe 或 .app 中有效)
         Application.Quit();
     }
 }
