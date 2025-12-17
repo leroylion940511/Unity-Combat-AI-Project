@@ -53,13 +53,18 @@ public class PlayerController : MonoBehaviour
 
     void CheckAttackInput()
     {
-        // 只有在系統允許行動時 (例如沒有在硬直中) 才偵測
-        if (combatSystem.CanAct())
-        {
-            if (Input.GetKeyDown(KeyCode.J)) combatSystem.OnPlayerRequestAttack(CombatSystem.ActionType.LightAttack);
-            else if (Input.GetKeyDown(KeyCode.K)) combatSystem.OnPlayerRequestAttack(CombatSystem.ActionType.HeavyAttack);
-            else if (Input.GetKeyDown(KeyCode.L)) combatSystem.OnPlayerRequestAttack(CombatSystem.ActionType.Block);
-        }
+        // 這裡不需要檢查 combatSystem.CanAct() 了
+        // 因為我們希望在 QTE (CannotAct) 的時候也能輸入
+        // 判斷邏輯交給 CombatSystem 裡面去分流
+        
+        if (Input.GetKeyDown(KeyCode.J)) 
+            combatSystem.OnPlayerInput(CombatSystem.ActionType.LightAttack);
+            
+        else if (Input.GetKeyDown(KeyCode.K)) 
+            combatSystem.OnPlayerInput(CombatSystem.ActionType.HeavyAttack);
+            
+        else if (Input.GetKeyDown(KeyCode.L)) 
+            combatSystem.OnPlayerInput(CombatSystem.ActionType.Block);
     }
 
     void HandleMovement()
